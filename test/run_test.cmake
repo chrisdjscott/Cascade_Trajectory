@@ -25,7 +25,7 @@ execute_process(
     RESULT_VARIABLE status
 )
 if (status)
-    message(FATAL_ERROR "Error running BMtest code: '${status}'")
+    message(FATAL_ERROR "Error running test code: '${status}'")
 endif (status)
 
 #

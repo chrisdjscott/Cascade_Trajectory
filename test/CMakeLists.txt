@@ -11,7 +11,7 @@ if (BUILD_TESTING)
         message(WARNING "Python is not available to compare results - tests will run but fail")
     endif()
 
-    # macro for adding BMtest
+    # macro for adding test
     macro(add_bmtest TEST_TARGET TEST_NAME TEST_STEPS)
         set(REF_FILE ${CMAKE_CURRENT_SOURCE_DIR}/BMoriginal_${TEST_STEPS}_${CMAKE_Fortran_COMPILER_ID}.txt)
         if (NOT EXISTS ${REF_FILE})

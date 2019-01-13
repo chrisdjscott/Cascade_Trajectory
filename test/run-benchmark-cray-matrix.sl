@@ -14,7 +14,7 @@ export FC=ftn
 # max_time parameter
 MAX_TIME=25000
 
-# Note: Assumes you submit the job from the BMtest directory
+# Note: Assumes you submit the job from the test directory
 
 SCRATCH_DIR="/nesi/nobackup/${SLURM_JOB_ACCOUNT}/${USER}/scratch-${SLURM_JOB_ID}"
 mkdir -p ${SCRATCH_DIR}
@@ -34,11 +34,11 @@ srun make VERBOSE=1
 
 # run three times to get average
 echo "Running matrix 1..."
-time srun ./BMtest/cctest_matrix ${MAX_TIME}
+time srun ./test/cctest_matrix ${MAX_TIME}
 echo "Running matrix 2..."
-time srun ./BMtest/cctest_matrix ${MAX_TIME}
+time srun ./test/cctest_matrix ${MAX_TIME}
 echo "Running matrix 3..."
-time srun ./BMtest/cctest_matrix ${MAX_TIME}
+time srun ./test/cctest_matrix ${MAX_TIME}
 
 cd "${SLURM_SUBMIT_DIR}"
 mv ${SCRATCH_DIR} ./benchmark-matrix-${SLURM_JOB_ID}-${FC}
