@@ -18,5 +18,5 @@ python analyse-benchmark.py slurm-XXXXXX.out
 
 to get the timings (replacing XXXXXX with the slurm job ID).
 
-Tests can be run using the CTest in the CMake build folder - see the main
+Tests can be run using `ctest` in the CMake build folder - see the main
 README.md file for details.

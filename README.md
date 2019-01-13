@@ -1,30 +1,38 @@
-# Cascade_Trajectory
+# Cascade Trajectory
 
 Fortran 90 code for calculating the auto-correlations of a three-level atom. 
 
-cross_correlation.f90 is the actual code to be worked on.
-
-plot_correlation_traj.py is a python code using numpy and matplotlib.pyplot to plot the results.
+* *cross_correlation.f90* is the actual code to be worked on
+* *cross_correlation_matrix.f90* is a matrix version of the code to be worked on
+* *plot_correlation_traj.py* is a python code using `numpy` and `matplotlib.pyplot` to plot the results
 
 ## Benchmark test case
 
-For the NeSI project we work in the BMtest directory, in cc.f90. This code prints out an
-output file that can be compared with a reference file to ensure the results have not changed.
+The benchmark test cases use the same source code files mentioned above. The difference is that a
+preprocessor directive is passed at compile time to enable the tests (`-DTESTCASE`). This
+directive does the following:
 
-There are two versions of the benchmark case; the original version is cc.f90 and the matrix
-version is cc_matrix.f90. Both give the same results.
+* disable the usual (useful) output files
+* write a new output file that can be compared to a reference version, to check results did not change
+* uses a fixed random seed, so that the results are reproducible
 
-Check the README in BMtest too.
+Test reference files, run scripts and so on are located in the *test* directory.
+
+Different compilers will require different reference files for comparison, since the random number
+generators are likely to be different between compilers. Also, if parameters are changes, new reference
+files will need to be created.
+
+Check the README in the *test* directory too.
 
 ## Building the code
 
-CMake and a Fortran compiler (e.g. `gfortran` or `ifort`) is required to build the code.
+CMake and a Fortran compiler (e.g. `gfortran` or `ifort`) are required to build the code.
 
 ### Mahuika
 
 #### Intel Compiler
 
-From this directory run:
+From the directory this *README.md* file is located in, run:
 
 ```
 module load CMake intel
@@ -39,7 +47,7 @@ make VERBOSE=1
 
 #### Cray compiler
 
-From this directory run:
+From the directory this *README.md* file is located in, run:
 
 ```
 module load CMake PrgEnv-cray craype-broadwell
@@ -54,7 +62,7 @@ make VERBOSE=1
 
 #### GNU compiler
 
-From this directory run:
+From the directory this *README.md* file is located in, run:
 
 ```
 module load CMake intel
