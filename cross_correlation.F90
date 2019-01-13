@@ -70,9 +70,9 @@ PROGRAM Two_Filter_Cross_Correlation
   ! Time step
   REAL, PARAMETER :: dt = 0.001
   ! Max time in units of \gamma \tau
-  REAL, PARAMETER :: max_time = 100000
+  REAL :: max_time
   ! Total steps
-  INTEGER, PARAMETER :: steps = INT(max_time / dt, KIND=8)
+  INTEGER(KIND=8) :: steps
   ! Max time for tau calculations
   REAL, PARAMETER :: tau = 10
   ! Max number of time steps for tau calculations
@@ -81,7 +81,7 @@ PROGRAM Two_Filter_Cross_Correlation
 
   ! Useful stuff
   ! Time counter
-  INTEGER :: k
+  INTEGER(KIND=8) :: k
   ! Integer counter for atomic states m = {1,2,3} = {g,e,f}
   INTEGER :: m
   ! Integer counters for a photon number and b photon number
@@ -140,11 +140,48 @@ PROGRAM Two_Filter_Cross_Correlation
   REAL, DIMENSION(0:tau_max) :: correlation
   ! Array to store cross correlation
   REAL, DIMENSION(0:tau_max) :: cross_correlation
+#ifdef TESTCASE
+  ! File name for comparing the benchmark
+  CHARACTER(LEN=12) :: filename_test = "./BMtest.txt"
+#else
   ! File name for saving correlation and cross correlation data
-  CHARACTER(LEN=28) :: filename_correlation = "./data_files/correlation.txt"
+  CHARACTER(LEN=9) :: filename_correlation = "./cor.txt"
   ! Filename for saving parameters and time
-  CHARACTER(LEN=20) :: filename_time = "./data_files/tau.txt"
+  CHARACTER(LEN=9) :: filename_time = "./tau.txt"
+#endif
+  ! variable to identify which section was used (continuous evo, jump).
+  INTEGER :: last_sect
+  ! temporal variable to compare against last_sect and cycle in benchmark
+  INTEGER :: temp_bm
 
+  ! variables for reading command line arguments
+  INTEGER :: nargs
+  INTEGER :: ios
+  CHARACTER(LEN=32) :: buffer
+
+  ! read arguments to set number of steps for testing
+  nargs = COMMAND_ARGUMENT_COUNT()
+  IF (nargs .NE. 1) THEN
+    ! default
+    max_time = 1000.0
+  ELSE
+    CALL GET_COMMAND_ARGUMENT(1, buffer)
+    READ(buffer, *, iostat=ios) max_time
+    IF (ios .NE. 0) THEN
+      PRINT *, 'error reading max_time argument'
+      CALL EXIT(1)
+    END IF
+  END IF
+
+  ! set the number of steps based on input
+  steps = INT(max_time / dt, KIND=8)
+  PRINT *, "MAX TIME AND STEPS: ", max_time, steps
+
+#ifdef TESTCASE
+  ! open debug output file
+  OPEN(UNIT=3, file=filename_test, STATUS='replace', ACTION='write')
+#endif
+  
   ! Initialising matrices
   ! Raising and Lowering Operators
   sigmam = 0
@@ -193,6 +230,10 @@ PROGRAM Two_Filter_Cross_Correlation
   k2 = 0
   k3 = 0
   k4 = 0
+
+  ! initialise the section tag variable
+  last_sect = 0
+  temp_bm = 0
 
   ! Atom is initial in the ground state |psi(0)> = |0,0,g> = (1,0,0,...,0)
   psi = 0.0
@@ -281,7 +322,7 @@ PROGRAM Two_Filter_Cross_Correlation
 
     ! If corr_write is set to one we know that a transmission jump has occured
     ! and we can start recording
-    IF (corr_write .EQV. .TRUE.) THEN
+    IF (corr_write.eqv..TRUE.) THEN
       ! Update correlation of cavity a
       correlation(tau_counter) = correlation(tau_counter) + photon_a
       ! Update cross correlation of cavity b conditional on a detection from
@@ -393,6 +434,29 @@ PROGRAM Two_Filter_Cross_Correlation
 
     ! Add together for total probability
     prob_total = (prob_r_a + prob_t_a) + (prob_r_b + prob_t_b)
+
+!##############################################################################!
+!                      Section Benchmark testing                               !
+!##############################################################################!
+#ifdef TESTCASE
+    ! write the values to compare with the master file
+    ! give an initial time for the trajectory to get going
+    IF (k > 10000) THEN
+       ! we want to check all possibilities, temp_bm will cycle
+       ! through all of them, checking agains last_sect
+       IF (last_sect == temp_bm) THEN
+          WRITE(3,'(2I12,10E20.12)') k, last_sect, photon_a, photon_b, p_gg, &
+               & p_ee, p_ff, prob_atom_decay, prob_t_a, prob_r_a, prob_t_b, &
+               & prob_r_b
+          IF (temp_bm < 4) THEN ! reset the cycle or advance the cycle
+             temp_bm = temp_bm + 1
+          ELSE
+             temp_bm = 0
+          END IF
+       END IF
+    END IF
+#endif
+    
 !##############################################################################!
 !                      Section C: Evolve the system                            !
 !   If rand > prob then evolve the system continuously with the Hamiltonian    !
@@ -402,7 +466,9 @@ PROGRAM Two_Filter_Cross_Correlation
     CALL RANDOM_NUMBER(rand)
 
     ! If rand > prob then evolve the system continuously with the Hamiltonian
-    IF (rand >= prob_total) THEN
+    IF (rand >= prob_total) THEN !Section 0
+      ! tag the last section used to write to file
+      last_sect = 0
       ! Evolve using Runge-Kutta 4th Order
       psi_clone = psi
       ! First loop (na) is for photon number in cavity a |0>, |1>, ... |N>
@@ -433,9 +499,9 @@ PROGRAM Two_Filter_Cross_Correlation
           cassig_b = -i * SQRT(0.5 * gamma * kappa_b) * SQRT(1.0 * nb) * sigmam
           ! Matrix multiplication
           DO m=1,3
-            k1(nplace + m) = -i * dt * H_full(m,1) * psi_clone(nplace + 1) &
-                            &-i * dt * H_full(m,2) * psi_clone(nplace + 2) &
-                            &-i * dt * H_full(m,3) * psi_clone(nplace + 3)
+            k1(nplace + m) = H_full(m,1) * psi_clone(nplace + 1) &
+                            & + H_full(m,2) * psi_clone(nplace + 2) &
+                            & + H_full(m,3) * psi_clone(nplace + 3)
             ! Only calculate the next part for photon number na > 0 as the
             ! a^{\dagger} operator couples the |N-1> state to the |N> state.
             temp1 = 0
@@ -444,20 +510,20 @@ PROGRAM Two_Filter_Cross_Correlation
               ! cavity a
               ! photon number index for (na - 1)
               nplace_pm1 = (3 * (N + 1) * (na - 1)) + (3 * nb)
-              temp1 = -i * dt * cassig_a(m,1) * psi_clone(nplace_pm1 + 1) &
-                    & -i * dt * cassig_a(m,2) * psi_clone(nplace_pm1 + 2) &
-                    & -i * dt * cassig_a(m,3) * psi_clone(nplace_pm1 + 3)
+              temp1 = cassig_a(m,1) * psi_clone(nplace_pm1 + 1) &
+                    & + cassig_a(m,2) * psi_clone(nplace_pm1 + 2) &
+                    & + cassig_a(m,3) * psi_clone(nplace_pm1 + 3)
             END IF
             IF (nb /= 0) THEN
                ! cavity b
                ! photon number index for (nb - 1)
                nplace_pm1 = (3 * (N + 1) * na) + (3 * (nb - 1))
-               temp2 = -i * dt * cassig_b(m,1) * psi_clone(nplace_pm1 + 1) &
-                     & -i * dt * cassig_b(m,2) * psi_clone(nplace_pm1 + 2) &
-                     & -i * dt * cassig_b(m,3) * psi_clone(nplace_pm1 + 3)
+               temp2 = cassig_b(m,1) * psi_clone(nplace_pm1 + 1) &
+                     & + cassig_b(m,2) * psi_clone(nplace_pm1 + 2) &
+                     & + cassig_b(m,3) * psi_clone(nplace_pm1 + 3)
             END IF
             ! Update k vector
-            k1(nplace + m) = k1(nplace + m) + (temp1 + temp2)
+            k1(nplace + m) = -i * dt * (k1(nplace + m) + (temp1 + temp2))
           END DO
         END DO
       END DO
@@ -486,11 +552,11 @@ PROGRAM Two_Filter_Cross_Correlation
           cassig_b = -i * SQRT(0.5 * gamma * kappa_b) * SQRT(1.0 * nb) * sigmam
           ! Matrix multiplication
           DO m=1,3
-            k2(nplace + m) = -i * dt * H_full(m,1) * &
+            k2(nplace + m) = H_full(m,1) * &
                            & (psi_clone(nplace + 1) + 0.5 * k1(nplace + 1))&
-                           & -i * dt * H_full(m,2) * &
+                           & + H_full(m,2) * &
                            & (psi_clone(nplace + 2) + 0.5 * k1(nplace + 2))&
-                           & -i * dt * H_full(m,3) * &
+                           & + H_full(m,3) * &
                            & (psi_clone(nplace + 3) + 0.5 * k1(nplace + 3))
            ! Only calculate the next part for photon number l > 0 as the
            ! a^{\dagger} operator couples the |N-1> state to the |N> state.
@@ -499,11 +565,11 @@ PROGRAM Two_Filter_Cross_Correlation
               ! cavity a
               ! photon number index for (na - 1)
               nplace_pm1 = (3 * (N + 1) * (na - 1)) + (3 * nb)
-              temp1 = -i * dt * cassig_a(m,1) * &
+              temp1 = cassig_a(m,1) * &
                     & (psi_clone(nplace_pm1 + 1) + 0.5 * k1(nplace_pm1 + 1))&
-                    & -i * dt * cassig_a(m,2) * &
+                    & + cassig_a(m,2) * &
                     & (psi_clone(nplace_pm1 + 2) + 0.5 * k1(nplace_pm1 + 2))&
-                    & -i * dt * cassig_a(m,3) * &
+                    & + cassig_a(m,3) * &
                     & (psi_clone(nplace_pm1 + 3) + 0.5 * k1(nplace_pm1 + 3))
              END IF
              temp2 = 0
@@ -511,15 +577,15 @@ PROGRAM Two_Filter_Cross_Correlation
                 ! cavity b
                 ! photon number index for (nb - 1)
                 nplace_pm1 = (3 * (N + 1) * na) + (3 * (nb - 1))
-                temp2 = -i * dt * cassig_b(m,1) * &
+                temp2 = cassig_b(m,1) * &
                       & (psi_clone(nplace_pm1 + 1) + 0.5 * k1(nplace_pm1 + 1)) &
-                      & -i * dt * cassig_b(m,2) * &
+                      & + cassig_b(m,2) * &
                       & (psi_clone(nplace_pm1 + 2) + 0.5 * k1(nplace_pm1 + 2)) &
-                      & -i * dt * cassig_b(m,3) * &
+                      & + cassig_b(m,3) * &
                       & (psi_clone(nplace_pm1 + 3) + 0.5 * k1(nplace_pm1 + 3))
               END IF
             ! Update k vector
-            k2(nplace + m) = k2(nplace + m) + (temp1 + temp2)
+            k2(nplace + m) = -i * dt * (k2(nplace + m) + (temp1 + temp2))
           END DO
         END DO
       END DO
@@ -548,11 +614,11 @@ PROGRAM Two_Filter_Cross_Correlation
           cassig_b = -i * SQRT(0.5 * gamma * kappa_b) * SQRT(1.0 * nb) * sigmam
           ! Matrix multiplication
           DO m=1,3
-            k3(nplace + m) = -i * dt * H_full(m,1) * &
+            k3(nplace + m) = H_full(m,1) * &
                            & (psi_clone(nplace + 1) + 0.5 * k2(nplace + 1))&
-                           & -i * dt * H_full(m,2) * &
+                           & + H_full(m,2) * &
                            & (psi_clone(nplace + 2) + 0.5 * k2(nplace + 2))&
-                           & -i * dt * H_full(m,3) * &
+                           & + H_full(m,3) * &
                            & (psi_clone(nplace + 3) + 0.5 * k2(nplace + 3))
            ! Only calculate the next part for photon number l > 0 as the
            ! a^{\dagger} operator couples the |N-1> state to the |N> state.
@@ -561,11 +627,11 @@ PROGRAM Two_Filter_Cross_Correlation
               ! cavity a
               ! photon number index for (na - 1)
               nplace_pm1 = (3 * (N + 1) * (na - 1)) + (3 * nb)
-              temp1 = -i * dt * cassig_a(m,1) * &
+              temp1 = cassig_a(m,1) * &
                     & (psi_clone(nplace_pm1 + 1) + 0.5 * k2(nplace_pm1 + 1))&
-                    & -i * dt * cassig_a(m,2) * &
+                    & + cassig_a(m,2) * &
                     & (psi_clone(nplace_pm1 + 2) + 0.5 * k2(nplace_pm1 + 2))&
-                    & -i * dt * cassig_a(m,3) * &
+                    & + cassig_a(m,3) * &
                     & (psi_clone(nplace_pm1 + 3) + 0.5 * k2(nplace_pm1 + 3))
             END IF
             temp2 = 0
@@ -573,15 +639,15 @@ PROGRAM Two_Filter_Cross_Correlation
                ! cavity b
                ! photon number index for (nb - 1)
                nplace_pm1 = (3 * (N + 1) * na) + (3 * (nb - 1))
-               temp2 = -i * dt * cassig_b(m,1) * &
+               temp2 = cassig_b(m,1) * &
                      & (psi_clone(nplace_pm1 + 1) + 0.5 * k2(nplace_pm1 + 1)) &
-                     & -i * dt * cassig_b(m,2) * &
+                     & + cassig_b(m,2) * &
                      & (psi_clone(nplace_pm1 + 2) + 0.5 * k2(nplace_pm1 + 2)) &
-                     & -i * dt * cassig_b(m,3) * &
+                     & + cassig_b(m,3) * &
                      & (psi_clone(nplace_pm1 + 3) + 0.5 * k2(nplace_pm1 + 3))
              END IF
             ! Update k vector
-            k3(nplace + m) = k3(nplace + m) + (temp1 + temp2)
+            k3(nplace + m) = -i * dt * (k3(nplace + m) + (temp1 + temp2))
           END DO
         END DO
       END DO
@@ -610,11 +676,11 @@ PROGRAM Two_Filter_Cross_Correlation
           cassig_b = -i * SQRT(0.5 * gamma * kappa_b) * SQRT(1.0 * nb) * sigmam
           ! Matrix multiplication
           DO m=1,3
-            k4(nplace + m) = -i * dt * H_full(m,1) * &
+            k4(nplace + m) = H_full(m,1) * &
                            & (psi_clone(nplace + 1) + k3(nplace + 1))&
-                           & -i * dt * H_full(m,2) * &
+                           & + H_full(m,2) * &
                            & (psi_clone(nplace + 2) + k3(nplace + 2))&
-                           & -i * dt * H_full(m,3) * &
+                           & + H_full(m,3) * &
                            & (psi_clone(nplace + 3) + k3(nplace + 3))
            ! Only calculate the next part for photon number l > 0 as the
            ! a^{\dagger} operator couples the |N-1> state to the |N> state.
@@ -623,11 +689,11 @@ PROGRAM Two_Filter_Cross_Correlation
               ! cavity a
               ! photon number index for (na - 1)
               nplace_pm1 = (3 * (N + 1) * (na - 1)) + (3 * nb)
-              temp1 = -i * dt * cassig_a(m,1) * &
+              temp1 = cassig_a(m,1) * &
                     & (psi_clone(nplace_pm1 + 1) + k3(nplace_pm1 + 1))&
-                    & -i * dt * cassig_a(m,2) * &
+                    & + cassig_a(m,2) * &
                     & (psi_clone(nplace_pm1 + 2) + k3(nplace_pm1 + 2))&
-                    & -i * dt * cassig_a(m,3) * &
+                    & + cassig_a(m,3) * &
                     & (psi_clone(nplace_pm1 + 3) + k3(nplace_pm1 + 3))
             END IF
             temp2 = 0
@@ -635,11 +701,11 @@ PROGRAM Two_Filter_Cross_Correlation
                ! cavity b
                ! photon number index for (nb - 1)
                nplace_pm1 = (3 * (N + 1) * na) + (3 * (nb - 1))
-               temp2 = -i * dt * cassig_b(m,1) * &
+               temp2 = cassig_b(m,1) * &
                      & (psi_clone(nplace_pm1 + 1) + k3(nplace_pm1 + 1)) &
-                     & -i * dt * cassig_b(m,2) * &
+                     & + cassig_b(m,2) * &
                      & (psi_clone(nplace_pm1 + 2) + k3(nplace_pm1 + 2)) &
-                     & -i * dt * cassig_b(m,3) * &
+                     & + cassig_b(m,3) * &
                      & (psi_clone(nplace_pm1 + 3) + k3(nplace_pm1 + 3))
              END IF
             ! Update k vector
@@ -648,7 +714,7 @@ PROGRAM Two_Filter_Cross_Correlation
         END DO
       END DO
 
-      psi_clone = psi_clone + xis * (k1 + 2.0*(k2 + k3) + k4)
+      psi_clone = psi_clone + xis * (k1 + 2.0*(k2 + k3) - i * dt * k4)
 
       ! Normalise the state
       trace = 0
@@ -679,10 +745,12 @@ PROGRAM Two_Filter_Cross_Correlation
       P = P / prob_total
 
       ! Compare probabilities with a new random number
-      IF (rand <= P(1)) THEN
+      IF (rand <= P(1)) THEN !Section 1
         !############################################!
         !     A cavity emission from cavity a        !
         !############################################!
+        ! tag the last section used to write to file
+        last_sect = 1 
         count_t_a = count_t_a + 1
         ! Set logical for correlation.
         IF (tau_counter == 0) THEN
@@ -715,10 +783,12 @@ PROGRAM Two_Filter_Cross_Correlation
         tracesq = SQRT(trace)
         psi = psi_clone / tracesq
 
-      ELSE IF (rand > P(1) .AND. rand <= P(2)) THEN
+      ELSE IF (rand > P(1) .AND. rand <= P(2)) THEN !Section 2
         !############################################!
         !     A reflection jump from cavity a        !
         !############################################!
+        ! tag the last section used to write to file
+        last_sect = 2  
         count_r_a = count_r_a + 1
 
         ! Calculate the state for a cavity jump from a
@@ -762,10 +832,12 @@ PROGRAM Two_Filter_Cross_Correlation
         tracesq = SQRT(trace)
         psi = psi_clone / tracesq
 
-      ELSE IF (rand > P(2) .AND. rand <= P(3)) THEN
+      ELSE IF (rand > P(2) .AND. rand <= P(3)) THEN !Section 3
         !############################################!
         !     A cavity emission from cavity b        !
         !############################################!
+        ! tag the last section used to write to file
+        last_sect = 3 
         count_t_b = count_t_b + 1
 
         ! Calculate the state for a cavity decay from b
@@ -793,10 +865,12 @@ PROGRAM Two_Filter_Cross_Correlation
         END DO
         tracesq = SQRT(trace)
         psi = psi_clone / tracesq
-      ELSE IF (rand > P(3) .AND. rand <= P(4)) THEN
+      ELSE IF (rand > P(3) .AND. rand <= P(4)) THEN !Section 4
         !############################################!
         !     A reflection jump from cavity b        !
         !############################################!
+        ! tag the last section used to write to file
+        last_sect = 4 
         count_r_b = count_r_b + 1
 
         ! Calculate the state for a cavity jump from a
@@ -865,6 +939,8 @@ PROGRAM Two_Filter_Cross_Correlation
   correlation = correlation / mean_photon_a
   cross_correlation = cross_correlation / mean_photon_b
 
+  ! for testing we don't need the useful output files
+#ifndef TESTCASE
   ! Open file for paramters, time and mean photon number to be written to
   OPEN(UNIT=1, file=filename_time, STATUS='replace', ACTION='write')
   ! Write the values of the parameters to the first 9 lines. The time values
@@ -886,6 +962,7 @@ PROGRAM Two_Filter_Cross_Correlation
     WRITE(1,*) k * dt
     WRITE(2,*) correlation(k), cross_correlation(k)
   END DO
+#endif
 
   ! Print number of jumps that occured
 
@@ -906,8 +983,13 @@ SUBROUTINE init_random_seed()
   INTEGER, DIMENSION(:), ALLOCATABLE :: seed
   CALL RANDOM_SEED(size = n)
   ALLOCATE(seed(n))
+#ifdef TESTCASE
+  ! create a constant seed when running the test case (remove clock component)
+  seed = 37 * (/ (l - 1, l = 1, n) /)
+  CALL RANDOM_SEED(PUT = seed)
+#else
   CALL SYSTEM_CLOCK(COUNT=clock)
   seed = clock + 37 * (/ (l - 1, l = 1, n) /)
-  CALL RANDOM_SEED(PUT = seed)
+#endif
   DEALLOCATE(seed)
 END SUBROUTINE init_random_seed

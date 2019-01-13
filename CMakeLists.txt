@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.0)
+cmake_minimum_required(VERSION 3.1)
 project(cross_correlation LANGUAGES Fortran)
 
 # add testing, can be disabled with -DBUILD_TESTING=OFF
@@ -26,7 +26,8 @@ if (DOUBLE_PRECISION)
 	set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${DOUBLE_OPT}")
 endif()
 
-add_executable(cross_correlation cross_correlation.f90)
+add_executable(cross_correlation cross_correlation.F90)
+add_executable(cross_correlation_matrix cross_correlation_matrix.F90)
 
 # add BMtest directory
-add_subdirectory(BMtest)
+add_subdirectory(test)

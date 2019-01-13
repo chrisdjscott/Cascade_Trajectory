@@ -1,6 +1,8 @@
 # add the benchmark executables
-add_executable(cctest cc.f90)
-add_executable(cctest_matrix cc_matrix.f90)
+add_executable(cctest "${CMAKE_CURRENT_SOURCE_DIR}/../cross_correlation.F90")
+target_compile_definitions(cctest PUBLIC TESTCASE)
+add_executable(cctest_matrix "${CMAKE_CURRENT_SOURCE_DIR}/../cross_correlation_matrix.F90")
+target_compile_definitions(cctest_matrix PUBLIC TESTCASE)
 
 if (BUILD_TESTING)
     # Python is required for comparison

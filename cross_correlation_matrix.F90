@@ -162,12 +162,15 @@ PROGRAM Two_Filter_Cross_Correlation
   REAL, DIMENSION(0:tau_max) :: correlation
   ! Array to store cross correlation
   REAL, DIMENSION(0:tau_max) :: cross_correlation
+#ifdef TESTCASE
+  ! File name for comparing the benchmark
+  CHARACTER(LEN=12) :: filename_test = "./BMtest.txt"
+#else
   ! File name for saving correlation and cross correlation data
   CHARACTER(LEN=9) :: filename_correlation = "./cor.txt"
   ! Filename for saving parameters and time
   CHARACTER(LEN=9) :: filename_time = "./tau.txt"
-  ! File name for comparing the benchmark
-  CHARACTER(LEN=12) :: filename_test = "./BMtest.txt"
+#endif
   ! variable to identify which section was used (continuous evo, jump).
   INTEGER :: last_sect
   ! temporal variable to compare against last_sect and cycle in benchmark
@@ -202,8 +205,10 @@ PROGRAM Two_Filter_Cross_Correlation
     sqrt_n(l) = SQRT(1.0 * l)
   END DO
 
-  ! open output file
+#ifdef TESTCASE
+  ! open debug output file
   OPEN(UNIT=3, file=filename_test, STATUS='replace', ACTION='write')
+#endif
   
   ! Initialising matrices
   ! Atom Raising and Lowering Operators
@@ -538,6 +543,7 @@ PROGRAM Two_Filter_Cross_Correlation
 !##############################################################################!
 !                      Section Benchmark testing                               !
 !##############################################################################!
+#ifdef TESTCASE
     ! write the values to compare with the master file
     ! give an initial time for the trajectory to get going
     IF (k > 10000) THEN
@@ -554,7 +560,7 @@ PROGRAM Two_Filter_Cross_Correlation
           END IF
        END IF
     END IF
-    
+#endif
     
 !##############################################################################!
 !                      Section C: Evolve the system                            !
@@ -992,27 +998,29 @@ PROGRAM Two_Filter_Cross_Correlation
   cross_correlation = cross_correlation / mean_photon_b
 
   ! for testing we don't need the useful output files
-!!$  ! Open file for paramters, time and mean photon number to be written to
-!!$  OPEN(UNIT=1, file=filename_time, STATUS='replace', ACTION='write')
-!!$  ! Write the values of the parameters to the first 9 lines. The time values
-!!$  ! will start on the 10th line
-!!$  WRITE(1,*) omega
-!!$  WRITE(1,*) delta
-!!$  WRITE(1,*) xi
-!!$  WRITE(1,*) alpha
-!!$  WRITE(1,*) D_a
-!!$  WRITE(1,*) kappa_a
-!!$  WRITE(1,*) D_b
-!!$  WRITE(1,*) kappa_b
-!!$  WRITE(1,*) ' '
-!!$
-!!$  ! Open files for state probabilities to be written to
-!!$  OPEN(UNIT=2, file=filename_correlation, STATUS='replace', ACTION='write')
-!!$
-!!$  DO k=0,tau_max
-!!$    WRITE(1,*) k * dt
-!!$    WRITE(2,*) correlation(k), cross_correlation(k)
-!!$  END DO
+#ifndef TESTCASE
+  ! Open file for paramters, time and mean photon number to be written to
+  OPEN(UNIT=1, file=filename_time, STATUS='replace', ACTION='write')
+  ! Write the values of the parameters to the first 9 lines. The time values
+  ! will start on the 10th line
+  WRITE(1,*) omega
+  WRITE(1,*) delta
+  WRITE(1,*) xi
+  WRITE(1,*) alpha
+  WRITE(1,*) D_a
+  WRITE(1,*) kappa_a
+  WRITE(1,*) D_b
+  WRITE(1,*) kappa_b
+  WRITE(1,*) ' '
+
+  ! Open files for state probabilities to be written to
+  OPEN(UNIT=2, file=filename_correlation, STATUS='replace', ACTION='write')
+
+  DO k=0,tau_max
+    WRITE(1,*) k * dt
+    WRITE(2,*) correlation(k), cross_correlation(k)
+  END DO
+#endif
 
   ! Print number of jumps that occured
 
@@ -1033,10 +1041,13 @@ SUBROUTINE init_random_seed()
   INTEGER, DIMENSION(:), ALLOCATABLE :: seed
   CALL RANDOM_SEED(size = n)
   ALLOCATE(seed(n))
-  !CALL SYSTEM_CLOCK(COUNT=clock)
-  !seed = clock + 37 * (/ (l - 1, l = 1, n) /)
-  ! create a constant seed (remove clock component)
+#ifdef TESTCASE
+  ! create a constant seed when running the test case (remove clock component)
   seed = 37 * (/ (l - 1, l = 1, n) /)
   CALL RANDOM_SEED(PUT = seed)
+#else
+  CALL SYSTEM_CLOCK(COUNT=clock)
+  seed = clock + 37 * (/ (l - 1, l = 1, n) /)
+#endif
   DEALLOCATE(seed)
 END SUBROUTINE init_random_seed
