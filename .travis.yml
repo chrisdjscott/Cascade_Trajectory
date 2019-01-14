@@ -17,4 +17,4 @@ install:
     - make VERBOSE=1
 
 script:
-    - ctest --output-on-failure -R short
+    - ctest -V -R short
