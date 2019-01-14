@@ -22,7 +22,7 @@ Different compilers will require different reference files for comparison, since
 generators are likely to be different between compilers. Also, if parameters are changes, new reference
 files will need to be created.
 
-Check the README in the *test* directory too.
+Check the [README.md](test/README.md) in the *test* directory too.
 
 ## Building the code
 
