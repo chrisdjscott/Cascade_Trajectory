@@ -33,11 +33,11 @@ if (BUILD_TESTING)
         )
     endmacro(add_bmtest)
 
-    # add the short test
-    add_bmtest(cctest "short" 1000)
+    # add the short tests
+    add_bmtest(cctest "short-original" 1000)
     add_bmtest(cctest_matrix "short-matrix" 1000)
 
-    # add the longer test
-    add_bmtest(cctest "long" 25000)
+    # add the longer tests
+    add_bmtest(cctest "long-original" 25000)
     add_bmtest(cctest_matrix "long-matrix" 25000)
 endif()
